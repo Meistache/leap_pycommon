@@ -138,3 +138,24 @@ class EventDispatcherTest(unittest.TestCase):
         with running_dispatcher(d):
             d.emit(event)
 
+    def test_failing_callback_does_not_break_event_loop(self):
+        d = EventDispatcher(Queue())
+
+        def callback(event):
+            raise Exception('Failed')
+
+        d.register(SOLEDAD_NEW_DATA_TO_SYNC, callback)
+
+        event = Event(SOLEDAD_NEW_DATA_TO_SYNC, {'foo': 'bar'})
+        with running_dispatcher(d):
+            d.emit(event)
+
+    def test_failing_transport_does_not_break_event_loop(self):
+        transport = MagicMock()
+        d = EventDispatcher(Queue(), [transport])
+        transport.forward.side_effect = Exception
+
+        event = Event(SOLEDAD_NEW_DATA_TO_SYNC, {'foo': 'bar'})
+        with running_dispatcher(d):
+            d.emit(event)
+

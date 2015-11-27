@@ -112,10 +112,18 @@ class EventDispatcher(object):
         callbacks = self._callbacks.get(event.event_type, [])
 
         for c in callbacks:
-            c(event.content)
+            try:
+                c(event.content)
+            except Exception, e:
+                #FIXME we should log this in the leap way
+                pass
 
 
     def _dispatch_to_transports(self, event):
         for t in self._transports:
-            t.forward(self, event)
+            try:
+                t.forward(self, event)
+            except Exception, e:
+                #FIXME we should log this in the leap way
+                pass
 
