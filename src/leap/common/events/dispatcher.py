@@ -41,23 +41,16 @@ TYPE_COMMAND=2
 
 
 class EventDispatcher(object):
-    def _event_dispatch_loop(self):
-        running = True
-        while running:
-            entry_type, entry_value = self._queue.get()
-            try:
-                if TYPE_EVENT == entry_type:
-                    self._dispatch_to_callbacks(entry_value)
-                    pass  # we need to dispatch
-                else:
-                    running = False  # for now assume we are supposed to stop
-            finally:
-                self._queue.task_done()
-
-    def __init__(self, queue, legacy_backends):
-        self._legacy_backends = legacy_backends
+    def __init__(self, queue, transports=[]):
+        self._transports = transports
         self._queue = queue
         self._callbacks = {}
+
+        self._register_with_transports()
+
+    def _register_with_transports(self):
+        for t in self._transports:
+            t.register_event_dispatcher(self)
 
     def start(self):
         self._thread = Thread(target=self._event_dispatch_loop)
@@ -69,6 +62,7 @@ class EventDispatcher(object):
 
     def register(self, event_type, callback):
         self._add_callback(event_type, callback)
+        self._transport_should_notify_us(event_type)
 
     def _add_callback(self, event_type, callback):
         if event_type not in self._callbacks:
@@ -78,11 +72,18 @@ class EventDispatcher(object):
 
         self._callbacks[event_type].append(callback)
 
+    def _transport_should_notify_us(self, event_type):
+        for t in self._transports:
+            t.notify_for(event_type)
+
     def _assert_callback_not_registered_for_type(self, event_type, callback):
         if callback in self._callbacks[event_type]:
             raise ValueError('Callback %s already registered for event %s' % (callback, event_type))
 
     def emit(self, event):
+        self._queue.put((TYPE_EVENT, event))
+
+    def emit_from_transport(self, transport, event):
         self._queue.put((TYPE_EVENT, event))
 
     def _event_dispatch_loop(self):
@@ -92,6 +93,8 @@ class EventDispatcher(object):
             try:
                 if TYPE_EVENT == entry_type:
                     self._dispatch_to_callbacks(entry_value)
+                    self._dispatch_to_transports(entry_value)
+                    # option b, it would be asynchronous with client code (pulled from queue)
                     pass  # we need to dispatch
                 else:
                     running = False  # for now assume we are supposed to stop
@@ -103,3 +106,9 @@ class EventDispatcher(object):
 
         for c in callbacks:
             c(event.content)
+
+
+    def _dispatch_to_transports(self, event):
+        for t in self._transports:
+            t.forward(self, event)
+
