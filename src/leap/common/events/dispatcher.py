@@ -97,6 +97,7 @@ class EventDispatcher(object):
         while running:
             entry_type, entry_value = self._queue.get()
             try:
+                print 'received event of type %s' % entry_type
                 if TYPE_EVENT == entry_type:
                     self._dispatch_to_callbacks(entry_value)
                     self._dispatch_to_transports(entry_value)
@@ -104,8 +105,10 @@ class EventDispatcher(object):
                 elif TYPE_TRANSPORT_EVENT == entry_type:
                     self._dispatch_to_callbacks(entry_value)
                 else:
+                    print 'setting running to False'
                     running = False  # for now assume we are supposed to stop
             finally:
+                print 'marking task done'
                 self._queue.task_done()
 
     def _dispatch_to_callbacks(self, event):
@@ -115,6 +118,7 @@ class EventDispatcher(object):
             try:
                 c(event.content)
             except Exception, e:
+                print e
                 #FIXME we should log this in the leap way
                 pass
 
@@ -124,6 +128,7 @@ class EventDispatcher(object):
             try:
                 t.forward(self, event)
             except Exception, e:
+                print e
                 #FIXME we should log this in the leap way
                 pass
 
