@@ -37,7 +37,12 @@ class Event(object):
 
 
 TYPE_EVENT=1
-TYPE_COMMAND=2
+TYPE_TRANSPORT_EVENT=2
+TYPE_COMMAND=3
+
+
+class Transport(object):
+    pass
 
 
 class EventDispatcher(object):
@@ -54,6 +59,7 @@ class EventDispatcher(object):
 
     def start(self):
         self._thread = Thread(target=self._event_dispatch_loop)
+        self._thread.setDaemon(True)
         self._thread.start()
 
     def stop(self):
@@ -84,7 +90,7 @@ class EventDispatcher(object):
         self._queue.put((TYPE_EVENT, event))
 
     def emit_from_transport(self, transport, event):
-        self._queue.put((TYPE_EVENT, event))
+        self._queue.put((TYPE_TRANSPORT_EVENT, event))
 
     def _event_dispatch_loop(self):
         running = True
@@ -95,7 +101,8 @@ class EventDispatcher(object):
                     self._dispatch_to_callbacks(entry_value)
                     self._dispatch_to_transports(entry_value)
                     # option b, it would be asynchronous with client code (pulled from queue)
-                    pass  # we need to dispatch
+                elif TYPE_TRANSPORT_EVENT == entry_type:
+                    self._dispatch_to_callbacks(entry_value)
                 else:
                     running = False  # for now assume we are supposed to stop
             finally:

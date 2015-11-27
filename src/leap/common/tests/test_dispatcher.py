@@ -1,9 +1,9 @@
 import unittest
 
-from leap.common.events.dispatcher import EventDispatcher, Event, SOLEDAD_NEW_DATA_TO_SYNC
+from leap.common.events.dispatcher import EventDispatcher, Event, SOLEDAD_NEW_DATA_TO_SYNC, Transport
 # from multiprocessing import Queue
 from Queue import Queue
-from mock import MagicMock
+from mock import MagicMock, patch
 
 def running_dispatcher(d):
     class RunningDispatcher(object):
@@ -17,6 +17,19 @@ def running_dispatcher(d):
             self._event_dispatcher.stop()
 
     return RunningDispatcher(d)
+
+class LocalTransport(Transport):
+
+    def __init__(self):
+        self.dispatchers = set()
+
+    def forward(self, dispatcher, event):
+        for d in self.dispatchers:
+            if d != dispatcher:
+                d.emit_from_transport(self, event)
+
+    def register_event_dispatcher(self, dispatcher):
+        self.dispatchers.add(dispatcher)
 
 
 class EventDispatcherTest(unittest.TestCase):
@@ -106,4 +119,22 @@ class EventDispatcherTest(unittest.TestCase):
             d.emit(event)
 
         transport.forward.assert_called_once_with(d, event)
+
+    @patch('leap.common.events.dispatcher.Thread')
+    def test_dispatch_thread_is_daemon_thread(self, thread_mock):
+        thread = thread_mock.return_value
+        d = EventDispatcher(Queue())
+
+        d.start()
+
+        thread.setDaemon.assert_called_once_with(True)
+
+    def test_with_local_transport(self):
+        transport = LocalTransport()
+        d = EventDispatcher(Queue(), [transport])
+
+        event = Event(SOLEDAD_NEW_DATA_TO_SYNC, {'foo': 'bar'})
+
+        with running_dispatcher(d):
+            d.emit(event)
 
